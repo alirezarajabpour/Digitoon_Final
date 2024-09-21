@@ -1,0 +1,102 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.4.0
+    container_name: mysql
+    restart: on-failure:10
+    environment:
+      MYSQL_ROOT_PASSWORD: digitoon123
+      MYSQL_DATABASE: logs
+      MYSQL_USER: digitoon
+      MYSQL_PASSWORD: digitoon123
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'no'
+    #command: --mysql-native-password=ON
+    ports:
+      - "13306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      #- ./mysql_conf/my.cnf:/etc/mysql/conf.d/my.cnf
+    networks:
+      - my_network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SERVER_ID: 1
+    networks:
+      - my_network
+    restart: on-failure:10
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - my_network
+    restart: on-failure:10
+
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 8888:8080
+    depends_on:
+      - kafka
+      - zookeeper
+      #- kafka2
+      #- kafka3
+      #- schema-registry
+      #- kafka-connect
+    environment:
+      KAFKA_CLUSTERS_0_NAME: digitoon
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: PLAINTEXT://kafka:9092
+      #KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      #KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+      #KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    networks:
+      - my_network
+    restart: on-failure:10
+
+  metabase:
+    image: metabase/metabase:v0.50.26
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mysql
+    environment:
+      MB_DB_TYPE: mysql
+      MB_DB_DBNAME: logs
+      MB_DB_PORT: 3306
+      MB_DB_USER: root
+      MB_DB_PASS: digitoon123
+      MB_DB_HOST: mysql
+      MB_DB_CONNECTION_URI: jdbc:mysql://mysql:3306/logs?allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      #- ./plugins:/plugins
+      #- ./download_vertica_jdbc.sh:/download_vertica_jdbc.sh
+      - /dev/urandom:/dev/random:ro
+      #entrypoint: ["sh", "-c", "./download_vertica_jdbc.sh && /app/run_metabase.sh"]
+    networks:
+      - my_network
+    restart: on-failure:10
+
+volumes:
+  mysql_data:
+
+networks:
+  my_network:
